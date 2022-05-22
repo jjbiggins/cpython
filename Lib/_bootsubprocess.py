@@ -37,8 +37,7 @@ def _check_cmd(cmd):
     # Use regex [a-zA-Z0-9./-]+: reject empty string, space, etc.
     safe_chars = []
     for first, last in (("a", "z"), ("A", "Z"), ("0", "9")):
-        for ch in range(ord(first), ord(last) + 1):
-            safe_chars.append(chr(ch))
+        safe_chars.extend(chr(ch) for ch in range(ord(first), ord(last) + 1))
     safe_chars.append("./-")
     safe_chars = ''.join(safe_chars)
 
@@ -78,8 +77,7 @@ def check_output(cmd, **kwargs):
     try:
         # system() spawns a shell
         status = os.system(cmd)
-        exitcode = os.waitstatus_to_exitcode(status)
-        if exitcode:
+        if exitcode := os.waitstatus_to_exitcode(status):
             raise ValueError(f"Command {cmd!r} returned non-zero "
                              f"exit status {exitcode!r}")
 

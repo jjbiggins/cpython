@@ -37,9 +37,7 @@ from types import GenericAlias
 Match = _namedtuple('Match', 'a b size')
 
 def _calculate_ratio(matches, length):
-    if length:
-        return 2.0 * matches / length
-    return 1.0
+    return 2.0 * matches / length if length else 1.0
 
 class SequenceMatcher:
 
@@ -283,9 +281,8 @@ class SequenceMatcher:
 
         # Purge junk elements
         self.bjunk = junk = set()
-        isjunk = self.isjunk
-        if isjunk:
-            for elt in b2j.keys():
+        if isjunk := self.isjunk:
+            for elt in b2j:
                 if isjunk(elt):
                     junk.add(elt)
             for elt in junk: # separate loop avoids separate list of keys
@@ -591,7 +588,7 @@ class SequenceMatcher:
                 group = []
                 i1, j1 = max(i1, i2-n), max(j1, j2-n)
             group.append((tag, i1, i2, j1 ,j2))
-        if group and not (len(group)==1 and group[0][0] == 'equal'):
+        if group and (len(group) != 1 or group[0][0] != 'equal'):
             yield group
 
     def ratio(self):
@@ -639,10 +636,7 @@ class SequenceMatcher:
         avail = {}
         availhas, matches = avail.__contains__, 0
         for elt in self.a:
-            if availhas(elt):
-                numb = avail[elt]
-            else:
-                numb = fullbcount.get(elt, 0)
+            numb = avail[elt] if availhas(elt) else fullbcount.get(elt, 0)
             avail[elt] = numb - 1
             if numb > 0:
                 matches = matches + 1
@@ -692,7 +686,7 @@ def get_close_matches(word, possibilities, n=3, cutoff=0.6):
     ['except']
     """
 
-    if not n >  0:
+    if n <= 0:
         raise ValueError("n must be > 0: %r" % (n,))
     if not 0.0 <= cutoff <= 1.0:
         raise ValueError("cutoff must be in [0.0, 1.0]: %r" % (cutoff,))
@@ -874,7 +868,7 @@ class Differ:
     def _dump(self, tag, x, lo, hi):
         """Generate comparison results for a same-tagged range."""
         for i in range(lo, hi):
-            yield '%s %s' % (tag, x[i])
+            yield f'{tag} {x[i]}'
 
     def _plain_replace(self, a, alo, ahi, b, blo, bhi):
         assert alo < ahi and blo < bhi
@@ -979,7 +973,7 @@ class Differ:
             yield from self._qformat(aelt, belt, atags, btags)
         else:
             # the synch pair is identical
-            yield '  ' + aelt
+            yield f'  {aelt}'
 
         # pump out diffs from after the synch point
         yield from self._fancy_helper(a, best_i+1, ahi, b, best_j+1, bhi)
@@ -1015,11 +1009,11 @@ class Differ:
         atags = _keep_original_ws(aline, atags).rstrip()
         btags = _keep_original_ws(bline, btags).rstrip()
 
-        yield "- " + aline
+        yield f"- {aline}"
         if atags:
             yield f"? {atags}\n"
 
-        yield "+ " + bline
+        yield f"+ {bline}"
         if btags:
             yield f"? {btags}\n"
 
@@ -1087,10 +1081,10 @@ def _format_range_unified(start, stop):
     beginning = start + 1     # lines start numbering with one
     length = stop - start
     if length == 1:
-        return '{}'.format(beginning)
+        return f'{beginning}'
     if not length:
         beginning -= 1        # empty ranges begin at line just before the range
-    return '{},{}'.format(beginning, length)
+    return f'{beginning},{length}'
 
 def unified_diff(a, b, fromfile='', tofile='', fromfiledate='',
                  tofiledate='', n=3, lineterm='\n'):
@@ -1140,25 +1134,25 @@ def unified_diff(a, b, fromfile='', tofile='', fromfiledate='',
             started = True
             fromdate = '\t{}'.format(fromfiledate) if fromfiledate else ''
             todate = '\t{}'.format(tofiledate) if tofiledate else ''
-            yield '--- {}{}{}'.format(fromfile, fromdate, lineterm)
-            yield '+++ {}{}{}'.format(tofile, todate, lineterm)
+            yield f'--- {fromfile}{fromdate}{lineterm}'
+            yield f'+++ {tofile}{todate}{lineterm}'
 
         first, last = group[0], group[-1]
         file1_range = _format_range_unified(first[1], last[2])
         file2_range = _format_range_unified(first[3], last[4])
-        yield '@@ -{} +{} @@{}'.format(file1_range, file2_range, lineterm)
+        yield f'@@ -{file1_range} +{file2_range} @@{lineterm}'
 
         for tag, i1, i2, j1, j2 in group:
             if tag == 'equal':
                 for line in a[i1:i2]:
-                    yield ' ' + line
+                    yield f' {line}'
                 continue
             if tag in {'replace', 'delete'}:
                 for line in a[i1:i2]:
-                    yield '-' + line
+                    yield f'-{line}'
             if tag in {'replace', 'insert'}:
                 for line in b[j1:j2]:
-                    yield '+' + line
+                    yield f'+{line}'
 
 
 ########################################################################
@@ -1173,8 +1167,8 @@ def _format_range_context(start, stop):
     if not length:
         beginning -= 1        # empty ranges begin at line just before the range
     if length <= 1:
-        return '{}'.format(beginning)
-    return '{},{}'.format(beginning, beginning + length - 1)
+        return f'{beginning}'
+    return f'{beginning},{beginning + length - 1}'
 
 # See http://www.unix.org/single_unix_specification/
 def context_diff(a, b, fromfile='', tofile='',
@@ -1229,14 +1223,14 @@ def context_diff(a, b, fromfile='', tofile='',
             started = True
             fromdate = '\t{}'.format(fromfiledate) if fromfiledate else ''
             todate = '\t{}'.format(tofiledate) if tofiledate else ''
-            yield '*** {}{}{}'.format(fromfile, fromdate, lineterm)
-            yield '--- {}{}{}'.format(tofile, todate, lineterm)
+            yield f'*** {fromfile}{fromdate}{lineterm}'
+            yield f'--- {tofile}{todate}{lineterm}'
 
         first, last = group[0], group[-1]
-        yield '***************' + lineterm
+        yield f'***************{lineterm}'
 
         file1_range = _format_range_context(first[1], last[2])
-        yield '*** {} ****{}'.format(file1_range, lineterm)
+        yield f'*** {file1_range} ****{lineterm}'
 
         if any(tag in {'replace', 'delete'} for tag, _, _, _, _ in group):
             for tag, i1, i2, _, _ in group:
@@ -1245,7 +1239,7 @@ def context_diff(a, b, fromfile='', tofile='',
                         yield prefix[tag] + line
 
         file2_range = _format_range_context(first[3], last[4])
-        yield '--- {} ----{}'.format(file2_range, lineterm)
+        yield f'--- {file2_range} ----{lineterm}'
 
         if any(tag in {'replace', 'insert'} for tag, _, _, _, _ in group):
             for tag, _, _, j1, j2 in group:
@@ -1540,7 +1534,7 @@ def _mdiff(fromlines, tolines, context=None, linejunk=None,
         fromlines,tolines=[],[]
         while True:
             # Collecting lines of text until we have a from/to pair
-            while (len(fromlines)==0 or len(tolines)==0):
+            while not fromlines or not tolines:
                 try:
                     from_line, to_line, found_diff = next(line_iterator)
                 except StopIteration:
@@ -1782,14 +1776,12 @@ class HtmlDiff(object):
             if text[i] == '\0':
                 i += 1
                 mark = text[i]
-                i += 1
             elif text[i] == '\1':
-                i += 1
                 mark = ''
             else:
-                i += 1
                 n += 1
 
+            i += 1
         # wrap point is inside text, break it up into separate lines
         line1 = text[:i]
         line2 = text[i:]
@@ -1825,14 +1817,8 @@ class HtmlDiff(object):
             # yield from/to line in pairs inserting blank lines as
             # necessary when one side has more wrapped lines
             while fromlist or tolist:
-                if fromlist:
-                    fromdata = fromlist.pop(0)
-                else:
-                    fromdata = ('',' ')
-                if tolist:
-                    todata = tolist.pop(0)
-                else:
-                    todata = ('',' ')
+                fromdata = fromlist.pop(0) if fromlist else ('', ' ')
+                todata = tolist.pop(0) if tolist else ('', ' ')
                 yield fromdata,todata,flag
 
     def _collect_lines(self,diffs):
@@ -1964,10 +1950,7 @@ class HtmlDiff(object):
         fromlines,tolines = self._tab_newline_replace(fromlines,tolines)
 
         # create diffs iterator which generates side by side from/to data
-        if context:
-            context_lines = numlines
-        else:
-            context_lines = None
+        context_lines = numlines if context else None
         diffs = _mdiff(fromlines,tolines,context_lines,linejunk=self._linejunk,
                       charjunk=self._charjunk)
 

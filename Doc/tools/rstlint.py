@@ -119,20 +119,20 @@ three_dot_directive_re = re.compile(r"\.\.\. %s::" % all_directives)
 # :const:``None``
 # instead of:
 # :const:`None`
-double_backtick_role = re.compile(r"(?<!``)%s``" % all_roles)
+double_backtick_role = re.compile(f"(?<!``){all_roles}``")
 
 
 # Find role used with no backticks instead of simple backticks like:
 # :const:None
 # instead of:
 # :const:`None`
-role_with_no_backticks = re.compile(r"%s[^` ]" % all_roles)
+role_with_no_backticks = re.compile(f"{all_roles}[^` ]")
 
 # Find role glued with another word like:
 # the:c:func:`PyThreadState_LeaveTracing` function.
 # instad of:
 # the :c:func:`PyThreadState_LeaveTracing` function.
-role_glued_with_word = re.compile(r"[a-zA-Z]%s" % all_roles)
+role_glued_with_word = re.compile(f"[a-zA-Z]{all_roles}")
 
 default_role_re = re.compile(r"(^| )`\w([^`]*?\w)?`($| )")
 leaked_markup_re = re.compile(r"[a-z]::\s|`|\.\.\s*\w+:")
@@ -165,7 +165,7 @@ def check_syntax(fn, lines):
     try:
         compile(code, fn, 'exec')
     except SyntaxError as err:
-        yield err.lineno, 'not compilable: %s' % err
+        yield (err.lineno, f'not compilable: {err}')
 
 
 @checker('.rst', severity=2)
@@ -207,14 +207,15 @@ def check_whitespace(fn, lines):
 def check_line_length(fn, lines):
     """Check for line length; this checker is not run by default."""
     for lno, line in enumerate(lines):
-        if len(line) > 81:
-            # don't complain about tables, links and function signatures
-            if line.lstrip()[0] not in '+|' and \
-               'http://' not in line and \
-               not line.lstrip().startswith(('.. function',
-                                             '.. method',
-                                             '.. cfunction')):
-                yield lno+1, "line too long"
+        if (
+            len(line) > 81
+            and line.lstrip()[0] not in '+|'
+            and 'http://' not in line
+            and not line.lstrip().startswith(
+                ('.. function', '.. method', '.. cfunction')
+            )
+        ):
+            yield lno+1, "line too long"
 
 
 @checker('.html', severity=2, falsepositives=True)
@@ -340,7 +341,7 @@ Options:  -v       verbose (print all checked file names)
         return 2
 
     if not exists(path):
-        print('Error: path %s does not exist' % path)
+        print(f'Error: path {path} does not exist')
         return 2
 
     count = defaultdict(int)
@@ -371,13 +372,13 @@ Options:  -v       verbose (print all checked file names)
                 continue
 
             if verbose:
-                print('Checking %s...' % fn)
+                print(f'Checking {fn}...')
 
             try:
                 with open(fn, 'r', encoding='utf-8') as f:
                     lines = list(f)
             except (IOError, OSError) as err:
-                print('%s: cannot open: %s' % (fn, err))
+                print(f'{fn}: cannot open: {err}')
                 count[4] += 1
                 continue
 
@@ -391,16 +392,15 @@ Options:  -v       verbose (print all checked file names)
                         count[csev] += 1
     if verbose:
         print()
-    if not count:
-        if severity > 1:
-            print('No problems with severity >= %d found.' % severity)
-        else:
-            print('No problems found.')
-    else:
+    if count:
         for severity in sorted(count):
             number = count[severity]
             print('%d problem%s with severity %d found.' %
                   (number, number > 1 and 's' or '', severity))
+    elif severity > 1:
+        print('No problems with severity >= %d found.' % severity)
+    else:
+        print('No problems found.')
     return int(bool(count))
 
 

@@ -117,16 +117,27 @@ class LocaleTime(object):
         date_time[0] = time.strftime("%c", time_tuple).lower()
         date_time[1] = time.strftime("%x", time_tuple).lower()
         date_time[2] = time.strftime("%X", time_tuple).lower()
-        replacement_pairs = [('%', '%%'), (self.f_weekday[2], '%A'),
-                    (self.f_month[3], '%B'), (self.a_weekday[2], '%a'),
-                    (self.a_month[3], '%b'), (self.am_pm[1], '%p'),
-                    ('1999', '%Y'), ('99', '%y'), ('22', '%H'),
-                    ('44', '%M'), ('55', '%S'), ('76', '%j'),
-                    ('17', '%d'), ('03', '%m'), ('3', '%m'),
-                    # '3' needed for when no leading zero.
-                    ('2', '%w'), ('10', '%I')]
-        replacement_pairs.extend([(tz, "%Z") for tz_values in self.timezone
-                                                for tz in tz_values])
+        replacement_pairs = [
+            ('%', '%%'),
+            (self.f_weekday[2], '%A'),
+            (self.f_month[3], '%B'),
+            (self.a_weekday[2], '%a'),
+            (self.a_month[3], '%b'),
+            (self.am_pm[1], '%p'),
+            ('1999', '%Y'),
+            ('99', '%y'),
+            ('22', '%H'),
+            ('44', '%M'),
+            ('55', '%S'),
+            ('76', '%j'),
+            ('17', '%d'),
+            ('03', '%m'),
+            ('3', '%m'),
+            ('2', '%w'),
+            ('10', '%I'),
+            *[(tz, "%Z") for tz_values in self.timezone for tz in tz_values],
+        ]
+
         for offset,directive in ((0,'%c'), (1,'%x'), (2,'%X')):
             current_format = date_time[offset]
             for old, new in replacement_pairs:
@@ -140,10 +151,7 @@ class LocaleTime(object):
             # 2005-01-03 occurs before the first Monday of the year.  Otherwise
             # %U is used.
             time_tuple = time.struct_time((1999,1,3,1,1,1,6,3,0))
-            if '00' in time.strftime(directive, time_tuple):
-                U_W = '%W'
-            else:
-                U_W = '%U'
+            U_W = '%W' if '00' in time.strftime(directive, time_tuple) else '%U'
             date_time[offset] = current_format.replace('11', U_W)
         self.LC_date_time = date_time[0]
         self.LC_date = date_time[1]
@@ -176,10 +184,7 @@ class TimeRE(dict):
         Order of execution is important for dependency reasons.
 
         """
-        if locale_time:
-            self.locale_time = locale_time
-        else:
-            self.locale_time = LocaleTime()
+        self.locale_time = locale_time or LocaleTime()
         base = super()
         base.__init__({
             # The " [1-9]" part of the regex is to make %c from ANSI C work
@@ -232,8 +237,8 @@ class TimeRE(dict):
         else:
             return ''
         regex = '|'.join(re_escape(stuff) for stuff in to_convert)
-        regex = '(?P<%s>%s' % (directive, regex)
-        return '%s)' % regex
+        regex = f'(?P<{directive}>{regex}'
+        return f'{regex})'
 
     def pattern(self, format):
         """Return regex pattern for the format string.
@@ -252,11 +257,10 @@ class TimeRE(dict):
         format = whitespace_replacement.sub(r'\\s+', format)
         while '%' in format:
             directive_index = format.index('%')+1
-            processed_format = "%s%s%s" % (processed_format,
-                                           format[:directive_index-1],
-                                           self[format[directive_index]])
+            processed_format = f"{processed_format}{format[:directive_index-1]}{self[format[directive_index]]}"
+
             format = format[directive_index+1:]
-        return "%s%s" % (processed_format, format)
+        return f"{processed_format}{format}"
 
     def compile(self, format):
         """Return a compiled re object for the format string."""
@@ -285,9 +289,8 @@ def _calc_julian_from_U_or_W(year, week_of_year, day_of_week, week_starts_Mon):
     week_0_length = (7 - first_weekday) % 7
     if week_of_year == 0:
         return 1 + day_of_week - first_weekday
-    else:
-        days_to_week = week_0_length + (7 * (week_of_year - 1))
-        return 1 + days_to_week + day_of_week
+    days_to_week = week_0_length + (7 * (week_of_year - 1))
+    return 1 + days_to_week + day_of_week
 
 
 def _calc_julian_from_V(iso_year, iso_week, iso_weekday):
@@ -349,8 +352,7 @@ def _strptime(data_string, format="%a %b %d %H:%M:%S %Y"):
         raise ValueError("time data %r does not match format %r" %
                          (data_string, format))
     if len(data_string) != found.end():
-        raise ValueError("unconverted data remains: %s" %
-                          data_string[found.end():])
+        raise ValueError(f"unconverted data remains: {data_string[found.end():]}")
 
     iso_year = year = None
     month = day = 1
@@ -373,14 +375,7 @@ def _strptime(data_string, format="%a %b %d %H:%M:%S %Y"):
         #   U, W
         #      worthless without day of the week
         if group_key == 'y':
-            year = int(found_dict['y'])
-            # Open Group specification for strptime() states that a %y
-            #value in the range of [00, 68] is in the century 2000, while
-            #[69,99] is in the century 1900
-            if year <= 68:
-                year += 2000
-            else:
-                year += 1900
+            year = int(found_dict['y']) + (2000 if year <= 68 else 1900)
         elif group_key == 'Y':
             year = int(found_dict['Y'])
         elif group_key == 'G':
@@ -431,18 +426,12 @@ def _strptime(data_string, format="%a %b %d %H:%M:%S %Y"):
             else:
                 weekday -= 1
         elif group_key == 'u':
-            weekday = int(found_dict['u'])
-            weekday -= 1
+            weekday = int(found_dict['u']) - 1
         elif group_key == 'j':
             julian = int(found_dict['j'])
         elif group_key in ('U', 'W'):
             week_of_year = int(found_dict[group_key])
-            if group_key == 'U':
-                # U starts week on Sunday.
-                week_of_year_start = 6
-            else:
-                # W starts week on Monday.
-                week_of_year_start = 0
+            week_of_year_start = 6 if group_key == 'U' else 0
         elif group_key == 'V':
             iso_week = int(found_dict['V'])
         elif group_key == 'z':
@@ -477,12 +466,13 @@ def _strptime(data_string, format="%a %b %d %H:%M:%S %Y"):
                     # Deal with bad locale setup where timezone names are the
                     # same and yet time.daylight is true; too ambiguous to
                     # be able to tell what timezone has daylight savings
-                    if (time.tzname[0] == time.tzname[1] and
-                       time.daylight and found_zone not in ("utc", "gmt")):
-                        break
-                    else:
+                    if (
+                        time.tzname[0] != time.tzname[1]
+                        or not time.daylight
+                        or found_zone in ("utc", "gmt")
+                    ):
                         tz = value
-                        break
+                    break
     # Deal with the cases where ambiguities arize
     # don't assume default values for ISO week/year
     if year is None and iso_year is not None:
@@ -505,18 +495,19 @@ def _strptime(data_string, format="%a %b %d %H:%M:%S %Y"):
                              "instead.")
 
     leap_year_fix = False
-    if year is None and month == 2 and day == 29:
-        year = 1904  # 1904 is first leap year of 20th century
-        leap_year_fix = True
-    elif year is None:
-        year = 1900
+    if year is None:
+        if month == 2 and day == 29:
+            year = 1904  # 1904 is first leap year of 20th century
+            leap_year_fix = True
+        else:
+            year = 1900
 
 
     # If we know the week of the year and what day of that week, we can figure
     # out the Julian day of the year.
     if julian is None and weekday is not None:
         if week_of_year is not None:
-            week_starts_Mon = True if week_of_year_start == 0 else False
+            week_starts_Mon = week_of_year_start == 0
             julian = _calc_julian_from_U_or_W(year, week_of_year, weekday,
                                                 week_starts_Mon)
         elif iso_year is not None and iso_week is not None:

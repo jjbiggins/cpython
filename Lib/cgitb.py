@@ -49,22 +49,13 @@ Content-Type: text/html
 
 __UNDEF__ = []                          # a special sentinel object
 def small(text):
-    if text:
-        return '<small>' + text + '</small>'
-    else:
-        return ''
+    return f'<small>{text}</small>' if text else ''
 
 def strong(text):
-    if text:
-        return '<strong>' + text + '</strong>'
-    else:
-        return ''
+    return f'<strong>{text}</strong>' if text else ''
 
 def grey(text):
-    if text:
-        return '<font color="#909090">' + text + '</font>'
-    else:
-        return ''
+    return '<font color="#909090">' + text + '</font>' if text else ''
 
 def lookup(name, frame, locals):
     """Find the value for a given name in the given environment."""
@@ -77,9 +68,8 @@ def lookup(name, frame, locals):
         if isinstance(builtins, dict):
             if name in builtins:
                 return 'builtin', builtins[name]
-        else:
-            if hasattr(builtins, name):
-                return 'builtin', getattr(builtins, name)
+        elif hasattr(builtins, name):
+            return 'builtin', getattr(builtins, name)
     return None, __UNDEF__
 
 def scanvars(reader, frame, locals):
@@ -96,7 +86,7 @@ def scanvars(reader, frame, locals):
                 where, value = lookup(token, frame, locals)
                 vars.append((token, where, value))
         elif token == '.':
-            prefix += lasttoken + '.'
+            prefix += f'{lasttoken}.'
             parent = value
         else:
             parent, prefix = None, ''
@@ -296,7 +286,7 @@ class Hook:
         if self.display:
             if plain:
                 doc = pydoc.html.escape(doc)
-                self.file.write('<pre>' + doc + '</pre>\n')
+                self.file.write(f'<pre>{doc}' + '</pre>\n')
             else:
                 self.file.write(doc + '\n')
         else:
@@ -309,9 +299,9 @@ class Hook:
             try:
                 with os.fdopen(fd, 'w') as file:
                     file.write(doc)
-                msg = '%s contains the description of this error.' % path
+                msg = f'{path} contains the description of this error.'
             except:
-                msg = 'Tried to save traceback to %s, but failed.' % path
+                msg = f'Tried to save traceback to {path}, but failed.'
 
             if self.format == 'html':
                 self.file.write('<p>%s</p>\n' % msg)
