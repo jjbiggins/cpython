@@ -71,23 +71,22 @@ def _is_internal_class(cls_name, obj):
     if not isinstance(obj, type):
         return False
     qualname = getattr(obj, '__qualname__', '')
-    s_pattern = cls_name + '.' + getattr(obj, '__name__', '')
-    e_pattern = '.' + s_pattern
+    s_pattern = f'{cls_name}.' + getattr(obj, '__name__', '')
+    e_pattern = f'.{s_pattern}'
     return qualname == s_pattern or qualname.endswith(e_pattern)
 
 def _is_private(cls_name, name):
     # do not use `re` as `re` imports `enum`
-    pattern = '_%s__' % (cls_name, )
+    pattern = f'_{cls_name}__'
     pat_len = len(pattern)
-    if (
+    return bool(
+        (
             len(name) > pat_len
             and name.startswith(pattern)
-            and name[pat_len:pat_len+1] != ['_']
+            and name[pat_len : pat_len + 1] != ['_']
             and (name[-1] != '_' or name[-2] != '_')
-        ):
-        return True
-    else:
-        return False
+        )
+    )
 
 def _is_single_bit(num):
     """
@@ -144,9 +143,8 @@ def bin(num, max_bits=None):
         s = bltns.bin(~num ^ (ceiling - 1) + ceiling)
     sign = s[:3]
     digits = s[3:]
-    if max_bits is not None:
-        if len(digits) < max_bits:
-            digits = (sign[-1] * max_bits + digits)[-max_bits:]
+    if max_bits is not None and len(digits) < max_bits:
+        digits = (sign[-1] * max_bits + digits)[-max_bits:]
     return "%s %s" % (sign, digits)
 
 def _dedent(text):
@@ -193,13 +191,12 @@ class property(DynamicClassAttribute):
                 raise AttributeError(
                         '%r has no attribute %r' % (ownerclass, self.name)
                         )
+        elif self.fget is None:
+            raise AttributeError(
+                    '%r member has no attribute %r' % (ownerclass, self.name)
+                    )
         else:
-            if self.fget is None:
-                raise AttributeError(
-                        '%r member has no attribute %r' % (ownerclass, self.name)
-                        )
-            else:
-                return self.fget(instance)
+            return self.fget(instance)
 
     def __set__(self, instance, value):
         if self.fset is None:
@@ -238,10 +235,7 @@ class _proto_member:
         delattr(enum_class, member_name)
         # second step: create member based on enum_class
         value = self.value
-        if not isinstance(value, tuple):
-            args = (value, )
-        else:
-            args = value
+        args = value if isinstance(value, tuple) else (value, )
         if enum_class._member_type_ is tuple:   # special case for tuple enums
             args = (args, )     # wrap it one more time
         if not enum_class._use_args_:
@@ -306,10 +300,7 @@ class _proto_member:
                 else:
                     need_override = True
                     # keep looking for an enum.property
-        if descriptor and not need_override:
-            # previous enum.property found, no further action needed
-            pass
-        else:
+        if not descriptor or need_override:
             redirect = property()
             redirect.__set_name__(enum_class, member_name)
             if descriptor and need_override:
@@ -387,8 +378,7 @@ class _EnumDict(dict):
                 else:
                     value = list(value)
                 self._ignore = value
-                already = set(value) & set(self._member_names)
-                if already:
+                if already := set(value) & set(self._member_names):
                     raise ValueError(
                             '_ignore_ cannot specify already set names: %r'
                             % (already, )
@@ -404,13 +394,7 @@ class _EnumDict(dict):
         elif isinstance(value, nonmember):
             # unwrap value here; it won't be processed by the below `else`
             value = value.value
-        elif _is_descriptor(value):
-            pass
-        # TODO: uncomment next three lines in 3.12
-        # elif _is_internal_class(self._cls_name, value):
-        #     # do nothing, name will be a normal attribute
-        #     pass
-        else:
+        elif not _is_descriptor(value):
             if key in self:
                 # enum overwriting a descriptor?
                 raise TypeError('%r already defined as %r' % (key, self[key]))
